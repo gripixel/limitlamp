@@ -1,6 +1,6 @@
-// ClaudeUsagePanel.exe - Claude kullanim limitlerini gosteren, hafif, her zaman ustte duran panel.
+// Kotempo.exe - Claude kullanim limitlerini gosteren, hafif, her zaman ustte duran panel.
 // Ag erisimi YOK. Sadece yerel dosyalari okur:
-//   1) %LOCALAPPDATA%\ClaudeUsagePanel\limits.txt   (usage-feed.exe yazar, Claude Code statusLine'dan)
+//   1) %LOCALAPPDATA%\Kotempo\limits.txt   (kotempo-feed.exe yazar, Claude Code statusLine'dan)
 //   2) Claude Desktop'un plan-usage-history.json gunlugu (yedek kaynak, sifirlanma saati icermez)
 using System;
 using System.Collections.Generic;
@@ -15,7 +15,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace ClaudeUsagePanel
+namespace Kotempo
 {
     static class Native
     {
@@ -164,7 +164,7 @@ namespace ClaudeUsagePanel
         public PanelForm(Cfg c, bool demoMode)
         {
             cfg = c; demo = demoMode;
-            wmShow = Native.RegisterWindowMessage("ClaudeUsagePanel.Show.v1");
+            wmShow = Native.RegisterWindowMessage("Kotempo.Show.v1");
 
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
                      ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -173,7 +173,7 @@ namespace ClaudeUsagePanel
             StartPosition = FormStartPosition.Manual;
             AutoScaleMode = AutoScaleMode.None;
             BackColor = CBg;
-            Text = "Claude Kullanım";
+            Text = "Kotempo";
             TopMost = cfg.Top;
             Opacity = cfg.Opacity / 100.0;
 
@@ -190,7 +190,7 @@ namespace ClaudeUsagePanel
 
             BuildMenu();
             tray.ContextMenuStrip = menu;
-            tray.Text = "Claude Kullanım";
+            tray.Text = "Kotempo";
             tray.MouseClick += delegate(object s, MouseEventArgs e) { if (e.Button == MouseButtons.Left) ToggleVisible(); };
             tray.Visible = !demo;
 
@@ -549,7 +549,7 @@ namespace ClaudeUsagePanel
             string key = txt + "|" + c.ToArgb();
             string tip = rows[0].Has
                 ? "5 saat %" + Math.Round(rows[0].Pct) + " · Hafta %" + Math.Round(rows[1].Pct)
-                : "Claude Kullanım: veri yok";
+                : "Kotempo: veri yok";
             tray.Text = tip.Length > 120 ? tip.Substring(0, 120) : tip;
             if (key == trayKey) return;
             trayKey = key;
@@ -643,7 +643,7 @@ namespace ClaudeUsagePanel
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         static bool AutostartOn()
         {
-            try { using (var k = Registry.CurrentUser.OpenSubKey(RunKey)) return k != null && k.GetValue("ClaudeUsagePanel") != null; }
+            try { using (var k = Registry.CurrentUser.OpenSubKey(RunKey)) return k != null && k.GetValue("Kotempo") != null; }
             catch (Exception) { return false; }
         }
         static void SetAutostart(bool on)
@@ -653,8 +653,8 @@ namespace ClaudeUsagePanel
                 using (var k = Registry.CurrentUser.OpenSubKey(RunKey, true))
                 {
                     if (k == null) return;
-                    if (on) k.SetValue("ClaudeUsagePanel", "\"" + Application.ExecutablePath + "\"");
-                    else k.DeleteValue("ClaudeUsagePanel", false);
+                    if (on) k.SetValue("Kotempo", "\"" + Application.ExecutablePath + "\"");
+                    else k.DeleteValue("Kotempo", false);
                 }
             }
             catch (Exception) { }
@@ -664,7 +664,7 @@ namespace ClaudeUsagePanel
         {
             string settings = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "settings.json");
             bool wired = false;
-            try { wired = File.Exists(settings) && File.ReadAllText(settings).Contains("usage-feed"); } catch (IOException) { }
+            try { wired = File.Exists(settings) && File.ReadAllText(settings).Contains("kotempo-feed"); } catch (IOException) { }
             string msg =
                 "Claude Code bağlantısı (statusLine): " + (wired ? "kurulu" : "KURULU DEĞİL — connect-claude.ps1 çalıştırılmalı") + "\n" +
                 "Son besleme: " + (cur != null && cur.Source == "Claude Code" ? Ago(Store.Now() - cur.Updated) : (File.Exists(Store.LimitsPath) ? Ago(Store.Now() - Store.ReadLimits().Updated) : "hiç gelmedi")) + "\n" +
@@ -673,7 +673,7 @@ namespace ClaudeUsagePanel
                 "Veri klasörü: " + Store.Dir + "\n\n" +
                 "Bu program ağa hiç bağlanmaz; yalnızca yerel dosyaları okur.\n" +
                 "Not: Claude Code limitleri her yanıtta günceller; Claude Code kullanılmıyorsa değer eski kalabilir.";
-            MessageBox.Show(msg, "Claude Kullanım · Bağlantı durumu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(msg, "Kotempo · Bağlantı durumu", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         // =============================================================== fare
@@ -756,7 +756,7 @@ namespace ClaudeUsagePanel
         void DrawHeader(Graphics g)
         {
             using (var b = new SolidBrush(CAccent)) g.FillEllipse(b, 16, 16, 9, 9);
-            Str(g, "Claude Kullanım", fTitle, CText, new RectangleF(32, 11, 200, 20), sfL);
+            Str(g, "Kotempo", fTitle, CText, new RectangleF(32, 11, 200, 20), sfL);
 
             RectangleF m = BtnMenu, x = BtnClose;
             using (var b = new SolidBrush(CMuted))
@@ -876,11 +876,11 @@ namespace ClaudeUsagePanel
             if (!demo && snap == null)
             {
                 bool created;
-                mtx = new Mutex(true, "Local\\ClaudeUsagePanel.v1", out created);
+                mtx = new Mutex(true, "Local\\Kotempo.v1", out created);
                 if (!created)
                 {
                     // Zaten calisiyor: mevcut pencereyi one getir.
-                    Native.PostMessage(Native.HWND_BROADCAST, Native.RegisterWindowMessage("ClaudeUsagePanel.Show.v1"), IntPtr.Zero, IntPtr.Zero);
+                    Native.PostMessage(Native.HWND_BROADCAST, Native.RegisterWindowMessage("Kotempo.Show.v1"), IntPtr.Zero, IntPtr.Zero);
                     return 0;
                 }
             }

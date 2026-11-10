@@ -1,12 +1,12 @@
-// Ortak veri katmani: besleyici (usage-feed.exe) yazar, panel (ClaudeUsagePanel.exe) okur.
-// Hicbir ag erisimi yok. Sadece %LOCALAPPDATA%\ClaudeUsagePanel altindaki iki kucuk dosya.
+// Ortak veri katmani: besleyici (kotempo-feed.exe) yazar, panel (Kotempo.exe) okur.
+// Hicbir ag erisimi yok. Sadece %LOCALAPPDATA%\Kotempo altindaki iki kucuk dosya.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace ClaudeUsagePanel
+namespace Kotempo
 {
     public class Snapshot
     {
@@ -29,8 +29,8 @@ namespace ClaudeUsagePanel
     {
         static readonly DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        public static readonly string Dir = Environment.GetEnvironmentVariable("CLAUDE_USAGE_PANEL_DIR")
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClaudeUsagePanel");
+        public static readonly string Dir = Environment.GetEnvironmentVariable("KOTEMPO_DIR")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Kotempo");
         public static string LimitsPath { get { return Path.Combine(Dir, "limits.txt"); } }
         public static string HistoryPath { get { return Path.Combine(Dir, "history.csv"); } }
 

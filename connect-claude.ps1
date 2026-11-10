@@ -1,10 +1,10 @@
-# Claude Code'un statusLine ayarina usage-feed.exe'yi ekler (ya da -Remove ile kaldirir).
+# Claude Code'un statusLine ayarina kotempo-feed.exe'yi ekler (ya da -Remove ile kaldirir).
 # ~/.claude/settings.json'a sadece BIR satirlik "statusLine" girisi eklenir; once yedek alinir.
 # Baska bir statusLine zaten varsa dokunmaz (kendi komutunu bozmamak icin) ve seni uyarir.
 param([switch]$Remove, [string]$SettingsPath = (Join-Path $env:USERPROFILE '.claude\settings.json'))
 $ErrorActionPreference = 'Stop'
-$feed = (Join-Path $env:LOCALAPPDATA 'ClaudeUsagePanel\bin\usage-feed.exe').Replace([string][char]92, '/')
-if (-not $Remove -and -not (Test-Path $feed)) { throw "usage-feed.exe kurulu degil ($feed). Once .\install.ps1 calistir." }
+$feed = (Join-Path $env:LOCALAPPDATA 'Kotempo\bin\kotempo-feed.exe').Replace([string][char]92, '/')
+if (-not $Remove -and -not (Test-Path $feed)) { throw "kotempo-feed.exe kurulu degil ($feed). Once .\install.ps1 calistir." }
 
 if (-not (Test-Path $SettingsPath)) {
   if ($Remove) { Write-Host "settings.json yok, yapilacak bir sey yok."; return }
@@ -17,7 +17,7 @@ $null = $text | ConvertFrom-Json   # gecerli JSON degilse burada durur, dosyaya 
 $bak = "$SettingsPath.bak-" + (Get-Date -Format 'yyyyMMdd-HHmmss')
 Copy-Item $SettingsPath $bak
 
-$mine = '"statusLine"\s*:\s*\{[^{}]*usage-feed[^{}]*\}\s*,?'
+$mine = '"statusLine"\s*:\s*\{[^{}]*kotempo-feed[^{}]*\}\s*,?'
 if ($Remove) {
   if ($text -notmatch $mine) { Write-Host "Bizim statusLine girisimiz bulunamadi; dokunulmadi."; Remove-Item $bak; return }
   $new = [regex]::Replace($text, '[ \t]*' + $mine + '[ \t]*\r?\n?', '')
@@ -26,7 +26,7 @@ if ($Remove) {
   if ($text -match '"statusLine"\s*:') {
     Remove-Item $bak
     Write-Host "UYARI: settings.json'da baska bir statusLine var, degistirmedim."
-    Write-Host "Mevcut durum cubugu komutunu bozmamak icin otomatik eklemiyorum. Elle zincirlemek icin: usage-feed.exe'ye ayni stdin'i ver ($feed)."
+    Write-Host "Mevcut durum cubugu komutunu bozmamak icin otomatik eklemiyorum. Elle zincirlemek icin: kotempo-feed.exe'ye ayni stdin'i ver ($feed)."
     return
   }
   $entry = '"statusLine": { "type": "command", "command": "\"' + $feed + '\"" },'
