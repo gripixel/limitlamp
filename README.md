@@ -1,48 +1,67 @@
 # Limit Lamp
 
-A tiny always-on-top Windows panel that shows your Claude subscription limits live: the **5-hour session** and the **weekly limit**, with exact reset times, a pace indicator and a short history graph.
-
-**No sign-in. No account linking. No network access.** About 22 MB of RAM and ~0 % CPU when idle (a 40 KB executable).
+A small always-on-top Windows panel that shows your Claude subscription limits live: the **5-hour session**, the **weekly limit** and per-model weekly limits, with exact reset times, a pace indicator and a history graph. The background is translucent and the whole UI scales smoothly when you resize it.
 
 ![screenshot](docs/screenshot.png)
 
 > Unofficial community project. Not affiliated with, endorsed by, or sponsored by Anthropic. "Claude" is a trademark of Anthropic.
-> The user interface is currently in Turkish (all strings are in `src/Panel.cs`).
+> The interface is currently in Turkish (strings live in `app/limitlamp/model.py` and `render.py`).
 
-## How it works
+## Two ways to get data
 
-Claude Code passes a JSON document to its configurable `statusLine` command after every response. For subscribers it contains an official `rate_limits` field (usage percentage and reset time for the 5-hour and 7-day windows).
+| | Needs sign-in | Network | Gives you |
+|---|---|---|---|
+| **Claude Code link** (`statusLine`) | no | none | 5-hour + weekly %, exact reset times. Updates whenever Claude Code gets a response. |
+| **Account sign-in** (optional) | yes, once | only `claude.ai` / `api.anthropic.com` | Live values from your account (also other devices), per-model weekly limits, extra usage. Polled every ~3 minutes. |
 
-1. `limitlamp-feed.exe` is registered as the `statusLine` command. It reads that JSON from stdin and writes **only** the limits to `%LOCALAPPDATA%\LimitLamp\` (`limits.txt`, `history.csv`). Project paths, conversation content and tokens are never stored.
-2. `LimitLamp.exe` reads those files and draws the panel. As a fallback it reads Claude Desktop's own `plan-usage-history.json` log (percentages only, no reset time).
+You can use either or both. Without signing in, the program makes **no network connections at all**.
 
-Nothing is ever sent over the network, and no credentials are read or stored.
+### About the account sign-in (read this before using it)
+
+- You sign in **in your own browser**; your password is never typed into this program. You paste the code the page shows.
+- Only the `user:profile` scope is requested. The token is encrypted with Windows DPAPI (tied to your Windows user) before it is written to disk; *Menu → sign out* deletes it.
+- It uses Claude Code's **public OAuth client id** and the **undocumented** `api.anthropic.com/api/oauth/usage` endpoint (the same data Claude Code's `/usage` shows). This program identifies itself honestly as `LimitLamp/2.0`. The endpoint can change or be restricted at any time, and Anthropic's terms may limit third-party use of this login. **Use it at your own risk.** If you prefer to stay clear of that, use only the Claude Code link.
+
+## Why Python?
+
+On Windows 11 with *Smart App Control* enabled, any unsigned `.exe` you build yourself can be blocked. This project therefore ships as plain Python scripts that run on the already-signed `pythonw.exe` - nothing unsigned to block, no admin rights, no installer.
 
 ## Requirements
 
-Windows 10/11. Building uses the C# compiler that ships with Windows (.NET Framework 4.8), so nothing needs to be downloaded or installed.
+Windows 10/11, Python 3.9+ (python.org build with tkinter) and Pillow: `python -m pip install pillow`.
 
 ## Install
 
 ```powershell
-.\build.ps1            # compile to .\bin
-.\install.ps1          # copy to %LOCALAPPDATA%\LimitLamp\bin + Start Menu shortcut
-.\connect-claude.ps1   # add the statusLine entry to ~/.claude/settings.json (makes a backup first)
+.\install.ps1            # copies the app to %LOCALAPPDATA%\LimitLamp\app, Start Menu shortcut "Limit Lamp"
+.\connect-claude.ps1     # optional: link Claude Code's statusLine (backs up settings.json first)
 ```
 
-`connect-claude.ps1` adds a single `statusLine` entry. It refuses to overwrite an existing one, validates the JSON before and after, and keeps a timestamped backup. Undo with `.\connect-claude.ps1 -Remove`; uninstall with `.\install.ps1 -Uninstall`.
+Then start **Limit Lamp** from the Start Menu and, if you want live account data, use *right-click -> Claude hesabına giriş yap*.
+Undo: `.\connect-claude.ps1 -Remove`, `.\install.ps1 -Uninstall`.
 
-## Usage
+`connect-claude.ps1` adds a single `statusLine` entry to `~/.claude/settings.json`. It refuses to overwrite an existing one, validates the JSON before and after, and keeps a timestamped backup. The feeder (`limitlamp_feed.py`) writes only the limits (never project paths, conversation content or tokens) to `%LOCALAPPDATA%\LimitLamp\`.
 
-Drag to move · double-click the header for compact mode · right-click or the ⋯ button for the menu · × hides to the tray · the tray icon shows the 5-hour percentage. The white tick on a bar marks where you would be if you used the limit evenly across the window. A notification is shown above 90 %.
+## Using it
 
-Try it without any data: `LimitLamp.exe --demo`.
+- **Drag** to move; **drag any edge or corner** or **Ctrl + mouse wheel** to resize (everything scales together); **double-click the header** for compact mode.
+- **Right-click** or the ⋯ button for the menu: background transparency, size presets, always-on-top, start with Windows, sign in/out, connection status.
+- The header **lamp** turns green / amber / red with your highest usage; the tray icon shows the 5-hour percentage; a notification appears above 90 %.
+- The white tick on a bar marks where you would be if you used the limit evenly across the window.
+
+Try it with sample data: `pythonw app\limitlamp.pyw --demo`.
+
+## Tests
+
+```powershell
+python tests\test_core.py      # feeder, parsing, DPAPI store, OAuth helpers (dummy values only)
+python tests\selftest_gui.py   # drives a real window: zoom, resize, drag, compact, dialog, menu
+```
 
 ## Limitations
 
-- Values update whenever Claude Code receives a response. They are account-wide, but if you have not used Claude Code for a while the shown values are older (the panel shows their age).
-- Per-model weekly limits are not exposed through `statusLine`, so they are not shown.
-- `statusLine` support in Claude Code is what this relies on; if it changes, the feeder may need updating.
+- Account-wide values come from the server only when you sign in; the Claude Code link reflects the last Claude Code response.
+- The unofficial usage endpoint's response shape may change (a key-names-only dump is written to `api-shape.txt` if parsing fails, so it can be fixed).
 
 ## License
 
@@ -52,19 +71,12 @@ MIT
 
 # Limit Lamp (Türkçe)
 
-Claude abonelik limitlerini (5 saatlik oturum ve haftalık limit) kesin sıfırlanma zamanı, tempo göstergesi ve kısa geçmiş grafiğiyle canlı gösteren, her zaman üstte duran küçük Windows paneli.
-
-**Giriş yok, hesap bağlama yok, ağ bağlantısı yok.** Boşta yaklaşık 22 MB bellek ve ~%0 CPU.
+Claude abonelik limitlerini (5 saatlik oturum, haftalık limit, modele özel limitler) kesin sıfırlanma zamanı, tempo göstergesi ve geçmiş grafiğiyle canlı gösteren, her zaman üstte duran küçük Windows paneli. Arka plan yarı saydam; pencereyi büyütüp küçültünce tüm arayüz orantılı ölçeklenir.
 
 > Resmî olmayan topluluk projesidir; Anthropic ile bağlantılı değildir.
 
-## Nasıl çalışır
-Claude Code, her yanıttan sonra `statusLine` komutuna resmî `rate_limits` alanını (yüzde + sıfırlanma zamanı) içeren JSON verir. `limitlamp-feed.exe` bunu alıp yalnızca limitleri `%LOCALAPPDATA%\LimitLamp\` altına yazar; `LimitLamp.exe` o dosyaları okuyup paneli çizer. Proje yolu, sohbet içeriği ve token saklanmaz.
+**İki veri yolu:** (1) *Claude Code bağlantısı* - giriş yok, ağ yok; (2) *Hesap girişi* (isteğe bağlı) - tarayıcıda giriş yaparsın, şifren programa girilmez; token Windows DPAPI ile şifrelenir. Giriş modu Claude Code'un herkese açık OAuth kimliğini ve belgelenmemiş bir kullanım uç noktasını kullanır; **kendi sorumluluğunda kullan**. Giriş yapmazsan program hiçbir ağ bağlantısı kurmaz.
 
-## Kurulum
-```powershell
-.\build.ps1            # derle (Windows'un içindeki .NET Framework; indirme yok)
-.\install.ps1          # kur + Başlat menüsü kısayolu
-.\connect-claude.ps1   # ~/.claude/settings.json'a statusLine ekler (önce yedek alır)
-```
-Geri alma: `.\connect-claude.ps1 -Remove` ve `.\install.ps1 -Uninstall`.
+**Neden Python?** Windows 11'de Akıllı Uygulama Denetimi açıkken kendi derlediğin imzasız `.exe` engellenebilir; imzalı `pythonw.exe` üzerinde çalışan betikler engellenmez.
+
+**Kurulum:** `python -m pip install pillow` · `.\install.ps1` · (isteğe bağlı) `.\connect-claude.ps1` · Başlat menüsünden **Limit Lamp**. Geri alma: `.\connect-claude.ps1 -Remove`, `.\install.ps1 -Uninstall`.
