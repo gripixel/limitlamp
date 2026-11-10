@@ -1,6 +1,6 @@
-# Kotempo
+# Limit Lamp
 
-*Kotempo = quota + tempo.* A tiny always-on-top Windows panel that shows your Claude subscription limits live: the **5-hour session** and the **weekly limit**, with exact reset times, a pace indicator and a short history graph.
+A tiny always-on-top Windows panel that shows your Claude subscription limits live: the **5-hour session** and the **weekly limit**, with exact reset times, a pace indicator and a short history graph.
 
 **No sign-in. No account linking. No network access.** About 22 MB of RAM and ~0 % CPU when idle (a 40 KB executable).
 
@@ -13,8 +13,8 @@
 
 Claude Code passes a JSON document to its configurable `statusLine` command after every response. For subscribers it contains an official `rate_limits` field (usage percentage and reset time for the 5-hour and 7-day windows).
 
-1. `kotempo-feed.exe` is registered as the `statusLine` command. It reads that JSON from stdin and writes **only** the limits to `%LOCALAPPDATA%\Kotempo\` (`limits.txt`, `history.csv`). Project paths, conversation content and tokens are never stored.
-2. `Kotempo.exe` reads those files and draws the panel. As a fallback it reads Claude Desktop's own `plan-usage-history.json` log (percentages only, no reset time).
+1. `limitlamp-feed.exe` is registered as the `statusLine` command. It reads that JSON from stdin and writes **only** the limits to `%LOCALAPPDATA%\LimitLamp\` (`limits.txt`, `history.csv`). Project paths, conversation content and tokens are never stored.
+2. `LimitLamp.exe` reads those files and draws the panel. As a fallback it reads Claude Desktop's own `plan-usage-history.json` log (percentages only, no reset time).
 
 Nothing is ever sent over the network, and no credentials are read or stored.
 
@@ -26,7 +26,7 @@ Windows 10/11. Building uses the C# compiler that ships with Windows (.NET Frame
 
 ```powershell
 .\build.ps1            # compile to .\bin
-.\install.ps1          # copy to %LOCALAPPDATA%\Kotempo\bin + Start Menu shortcut
+.\install.ps1          # copy to %LOCALAPPDATA%\LimitLamp\bin + Start Menu shortcut
 .\connect-claude.ps1   # add the statusLine entry to ~/.claude/settings.json (makes a backup first)
 ```
 
@@ -36,7 +36,7 @@ Windows 10/11. Building uses the C# compiler that ships with Windows (.NET Frame
 
 Drag to move · double-click the header for compact mode · right-click or the ⋯ button for the menu · × hides to the tray · the tray icon shows the 5-hour percentage. The white tick on a bar marks where you would be if you used the limit evenly across the window. A notification is shown above 90 %.
 
-Try it without any data: `Kotempo.exe --demo`.
+Try it without any data: `LimitLamp.exe --demo`.
 
 ## Limitations
 
@@ -50,16 +50,16 @@ MIT
 
 ---
 
-# Kotempo (Türkçe)
+# Limit Lamp (Türkçe)
 
-*Kotempo = kota + tempo.* Claude abonelik limitlerini (5 saatlik oturum ve haftalık limit) kesin sıfırlanma zamanı, tempo göstergesi ve kısa geçmiş grafiğiyle canlı gösteren, her zaman üstte duran küçük Windows paneli.
+Claude abonelik limitlerini (5 saatlik oturum ve haftalık limit) kesin sıfırlanma zamanı, tempo göstergesi ve kısa geçmiş grafiğiyle canlı gösteren, her zaman üstte duran küçük Windows paneli.
 
 **Giriş yok, hesap bağlama yok, ağ bağlantısı yok.** Boşta yaklaşık 22 MB bellek ve ~%0 CPU.
 
 > Resmî olmayan topluluk projesidir; Anthropic ile bağlantılı değildir.
 
 ## Nasıl çalışır
-Claude Code, her yanıttan sonra `statusLine` komutuna resmî `rate_limits` alanını (yüzde + sıfırlanma zamanı) içeren JSON verir. `kotempo-feed.exe` bunu alıp yalnızca limitleri `%LOCALAPPDATA%\Kotempo\` altına yazar; `Kotempo.exe` o dosyaları okuyup paneli çizer. Proje yolu, sohbet içeriği ve token saklanmaz.
+Claude Code, her yanıttan sonra `statusLine` komutuna resmî `rate_limits` alanını (yüzde + sıfırlanma zamanı) içeren JSON verir. `limitlamp-feed.exe` bunu alıp yalnızca limitleri `%LOCALAPPDATA%\LimitLamp\` altına yazar; `LimitLamp.exe` o dosyaları okuyup paneli çizer. Proje yolu, sohbet içeriği ve token saklanmaz.
 
 ## Kurulum
 ```powershell

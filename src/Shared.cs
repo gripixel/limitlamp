@@ -1,12 +1,12 @@
-// Ortak veri katmani: besleyici (kotempo-feed.exe) yazar, panel (Kotempo.exe) okur.
-// Hicbir ag erisimi yok. Sadece %LOCALAPPDATA%\Kotempo altindaki iki kucuk dosya.
+// Ortak veri katmani: besleyici (limitlamp-feed.exe) yazar, panel (LimitLamp.exe) okur.
+// Hicbir ag erisimi yok. Sadece %LOCALAPPDATA%\LimitLamp altindaki iki kucuk dosya.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace Kotempo
+namespace LimitLamp
 {
     public class Snapshot
     {
@@ -29,8 +29,8 @@ namespace Kotempo
     {
         static readonly DateTime Epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        public static readonly string Dir = Environment.GetEnvironmentVariable("KOTEMPO_DIR")
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Kotempo");
+        public static readonly string Dir = Environment.GetEnvironmentVariable("LIMITLAMP_DIR")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LimitLamp");
         public static string LimitsPath { get { return Path.Combine(Dir, "limits.txt"); } }
         public static string HistoryPath { get { return Path.Combine(Dir, "history.csv"); } }
 

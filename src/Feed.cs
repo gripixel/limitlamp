@@ -1,4 +1,4 @@
-// kotempo-feed.exe: Claude Code'un "statusLine" komutu olarak calisir.
+// limitlamp-feed.exe: Claude Code'un "statusLine" komutu olarak calisir.
 // Claude Code, stdin'den oturum JSON'unu verir; icindeki rate_limits (5 saatlik + haftalik
 // yuzde ve sifirlanma zamani) alinip yerel dosyaya yazilir. Ag yok, token yok, baska hicbir alan saklanmaz.
 // stdout'a kisa bir ozet basar (Claude Code terminalinde durum cubugunda gorunur).
@@ -8,7 +8,7 @@ using System.IO;
 using System.Text;
 using System.Web.Script.Serialization;
 
-namespace Kotempo
+namespace LimitLamp
 {
     static class Feed
     {
@@ -84,7 +84,7 @@ namespace Kotempo
             catch (Exception ex)
             {
                 // Besleyici Claude Code'u asla bozmamali: sessizce cik (hata ayiklama icin env ile goster).
-                if (Environment.GetEnvironmentVariable("KOTEMPO_DEBUG") == "1") Console.Error.WriteLine(ex.ToString());
+                if (Environment.GetEnvironmentVariable("LIMITLAMP_DEBUG") == "1") Console.Error.WriteLine(ex.ToString());
             }
             return 0;
         }
