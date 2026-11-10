@@ -239,6 +239,34 @@ class SynthTests(unittest.TestCase):
         tail = sum(v * v for v in s[int(sound.RATE * 0.05):])
         self.assertGreater(head, tail * 5)                                            # sharp attack, quick decay
 
+    def test_tick_is_audible_on_small_speakers(self):
+        # The first version had ~50 % of its energy below 250 Hz, which laptop speakers cannot play: nothing was heard.
+        import math
+        s = sound.synth_tick()
+
+        def energy(lo, hi):
+            tot = 0.0
+            for f in range(lo, hi, 25):
+                k = 2 * math.cos(2 * math.pi * f / sound.RATE)
+                a = b = 0.0
+                for v in s:
+                    a, b = v + k * a - b, a
+                tot += a * a + b * b - k * a * b
+            return tot
+        total = energy(100, 5000)
+        self.assertGreater(energy(300, 3500) / total, 0.70)        # mostly in the clearly audible range
+        self.assertLess(energy(100, 250) / total, 0.20)            # little sub-bass
+        rms = math.sqrt(sum(v * v for v in s) / len(s))
+        self.assertGreater(20 * math.log10(rms), -24)              # not whisper-quiet at the default volume
+
+    def test_volume_levels(self):
+        self.assertLess(sound.peak_for(35), sound.peak_for(60))
+        self.assertLess(sound.peak_for(60), sound.peak_for(90))
+        self.assertLessEqual(sound.peak_for(100), 0.9)             # never clips
+        quiet, loud = sound.synth_tick(sound.peak_for(35)), sound.synth_tick(sound.peak_for(90))
+        self.assertLess(max(map(abs, quiet)), max(map(abs, loud)))
+        self.assertNotEqual(sound.wav_path(1, 35), sound.wav_path(1, 90))
+
     def test_wav_files_are_valid(self):
         for n in (1, 2, 3):
             p = sound.write_wav(os.path.join(os.environ["LIMITLAMP_DIR"], "t%d.wav" % n), n)

@@ -34,7 +34,7 @@ def feed(seven, five=10):
 
 
 played = []
-sound.play = lambda n=1: played.append(n) or True          # record instead of making noise
+sound.play = lambda n=1, v=60: played.append(n) or True    # record instead of making noise
 
 a = A.App(demo=False, single=None)
 a.cfg.sound = True

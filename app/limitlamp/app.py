@@ -16,6 +16,7 @@ from .store import Snapshot
 ZOOMS = (75, 100, 130, 170)
 OPACITIES = (100, 90, 80, 65, 50)
 INTERVALS = ((30, "30 sn"), (60, "1 dk"), (120, "2 dk"))
+VOLUMES = ((35, "Hafif"), (60, "Orta"), (90, "Yüksek"))
 CURSORS = {"l": "size_we", "r": "size_we", "t": "size_ns", "b": "size_ns",
            "tl": "size_nw_se", "br": "size_nw_se", "tr": "size_ne_sw", "bl": "size_ne_sw"}
 BG, BG2, FG, MUTED_HEX, ACCENT_HEX = "#181b23", "#22262f", "#eef0f5", "#929aa8", "#d97757"
@@ -29,6 +30,7 @@ class Cfg:
         self.top, self.compact, self.visible = True, False, True
         self.opacity, self.zoom = 88, 100
         self.sound, self.interval = True, 60      # tick on weekly +1 % / account poll period (s)
+        self.volume = sound.DEFAULT_VOLUME        # tick loudness (%)
 
     @classmethod
     def load(cls):
@@ -36,13 +38,14 @@ class Cfg:
         try:
             with open(os.path.join(store.DIR, cls.FILE), "r", encoding="utf-8") as f:
                 d = json.load(f)
-            for k in ("x", "y", "top", "compact", "visible", "opacity", "zoom", "sound", "interval"):
+            for k in ("x", "y", "top", "compact", "visible", "opacity", "zoom", "sound", "interval", "volume"):
                 if k in d:
                     setattr(c, k, d[k])
             c.opacity = max(30, min(100, int(c.opacity)))
             c.zoom = max(50, min(300, int(c.zoom)))
             c.interval = max(20, min(600, int(c.interval)))
             c.sound = bool(c.sound)
+            c.volume = max(10, min(100, int(c.volume)))
         except (OSError, ValueError, TypeError):
             pass
         return c
@@ -413,7 +416,7 @@ class App:
         self.cur = choose(self.poller.last, best, now)
         n = self.ticker.feed(self.cur, now)             # weekly +1 % -> soft tick (sound only)
         if n and self.cfg.sound and not self.demo:
-            sound.play(n)
+            sound.play(n, self.cfg.volume)
         if hist_changed:
             self.hist = store.read_history(now - 7 * 86400)
         self.rebuild_view()
@@ -667,6 +670,16 @@ class App:
         self.cfg.save()
         self.redraw()
 
+    def test_sound(self):
+        from tkinter import messagebox
+        if not sound.play(1, self.cfg.volume):
+            messagebox.showwarning("Limit Lamp", "Ses çalınamadı. Windows'ta bir çıkış cihazı seçili ve ses açık mı?")
+
+    def set_volume(self, vol):
+        self.cfg.volume = vol
+        self.cfg.save()
+        sound.play(1, vol)                              # preview the new level right away
+
     def toggle_sound(self):
         self.cfg.sound = not self.cfg.sound
         self.cfg.save()
@@ -740,7 +753,11 @@ class App:
             sub2.add_checkbutton(label="%%%d" % z, command=lambda z=z: self.set_zoom(z), variable=tk.BooleanVar(value=self.cfg.zoom == z))
         m.add_cascade(label="Boyut", menu=sub2)
         m.add_checkbutton(label="Haftalık %1 artışında ses", command=self.toggle_sound, variable=tk.BooleanVar(value=self.cfg.sound))
-        m.add_command(label="Sesi dene", command=lambda: sound.play(1))
+        m.add_command(label="Sesi dene", command=self.test_sound)
+        sub4 = tk.Menu(m, tearoff=0, bg="#1f232b", fg=FG, activebackground="#2c323e", activeforeground=FG, selectcolor=ACCENT_HEX, bd=0, font=("Segoe UI", 10))
+        for vol, lab in VOLUMES:
+            sub4.add_checkbutton(label=lab, command=lambda vol=vol: self.set_volume(vol), variable=tk.BooleanVar(value=self.cfg.volume == vol))
+        m.add_cascade(label="Ses seviyesi", menu=sub4)
         sub3 = tk.Menu(m, tearoff=0, bg="#1f232b", fg=FG, activebackground="#2c323e", activeforeground=FG, selectcolor=ACCENT_HEX, bd=0, font=("Segoe UI", 10))
         for sec, lab in INTERVALS:
             sub3.add_checkbutton(label=lab, command=lambda sec=sec: self.set_interval(sec), variable=tk.BooleanVar(value=self.cfg.interval == sec))
