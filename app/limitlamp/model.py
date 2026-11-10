@@ -33,6 +33,15 @@ class View:
         self.signed_in = False
         self.error = ""
 
+    def signature(self):
+        """Everything that affects the picture, as a comparable tuple (lets the app skip identical redraws)."""
+        def row(x):
+            return (x.title, x.has, round(x.pct, 1), x.reset_text, x.pace_text, x.pace_color, x.forecast,
+                    round(x.ideal, 1), x.compact_time, x.spark_label,
+                    tuple((round(a, 3), round(b, 3)) for a, b in x.spark))
+        return (tuple(row(x) for x in self.rows), tuple(row(x) for x in self.extra_rows),
+                self.footer, self.footer_color, self.has_data, self.signed_in, self.error)
+
 
 def dur(sec):
     sec = max(0, int(sec))

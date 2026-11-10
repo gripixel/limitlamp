@@ -1,4 +1,5 @@
 """Limit Lamp application: Tk event loop + a per-pixel-alpha layered window drawn with Pillow."""
+import copy
 import json
 import os
 import queue
@@ -8,12 +9,13 @@ import threading
 import time
 import webbrowser
 
-from . import auth, model, render, store, winapi
+from . import auth, model, render, sound, store, winapi
 from .render import M, WT
 from .store import Snapshot
 
 ZOOMS = (75, 100, 130, 170)
 OPACITIES = (100, 90, 80, 65, 50)
+INTERVALS = ((30, "30 sn"), (60, "1 dk"), (120, "2 dk"))
 CURSORS = {"l": "size_we", "r": "size_we", "t": "size_ns", "b": "size_ns",
            "tl": "size_nw_se", "br": "size_nw_se", "tr": "size_ne_sw", "bl": "size_ne_sw"}
 BG, BG2, FG, MUTED_HEX, ACCENT_HEX = "#181b23", "#22262f", "#eef0f5", "#929aa8", "#d97757"
@@ -26,6 +28,7 @@ class Cfg:
         self.x = self.y = None
         self.top, self.compact, self.visible = True, False, True
         self.opacity, self.zoom = 88, 100
+        self.sound, self.interval = True, 60      # tick on weekly +1 % / account poll period (s)
 
     @classmethod
     def load(cls):
@@ -33,11 +36,13 @@ class Cfg:
         try:
             with open(os.path.join(store.DIR, cls.FILE), "r", encoding="utf-8") as f:
                 d = json.load(f)
-            for k in ("x", "y", "top", "compact", "visible", "opacity", "zoom"):
+            for k in ("x", "y", "top", "compact", "visible", "opacity", "zoom", "sound", "interval"):
                 if k in d:
                     setattr(c, k, d[k])
             c.opacity = max(30, min(100, int(c.opacity)))
             c.zoom = max(50, min(300, int(c.zoom)))
+            c.interval = max(20, min(600, int(c.interval)))
+            c.sound = bool(c.sound)
         except (OSError, ValueError, TypeError):
             pass
         return c
@@ -59,6 +64,8 @@ _RX_SD = re.compile(r'"sd":(\d+(?:\.\d+)?)')
 
 
 def find_desktop_log():
+    if os.environ.get("LIMITLAMP_NO_DESKTOP_LOG") == "1":       # tests / opt-out
+        return None
     local = os.environ.get("LOCALAPPDATA") or ""
     cd = os.path.join(local, "Claude-Data")
     try:
@@ -109,6 +116,66 @@ def merge(feed, log):
     m.five_reset = feed.five_reset if feed.five_reset > now else 0
     m.seven_reset = feed.seven_reset if feed.seven_reset > now else 0
     return m
+
+
+def choose(api, best, now):
+    """The freshest snapshot wins. If it is not the account one but the account data is recent,
+    keep the account-only extras (per-model limits, extra usage) so they do not flicker away."""
+    cands = [c for c in (api, best) if c is not None]
+    if not cands:
+        return None
+    pick = max(cands, key=lambda c: c.updated)
+    if pick is not api and api is not None and now - api.updated < 20 * 60 and (api.models or api.has_extra):
+        pick = copy.copy(pick)
+        pick.models, pick.has_extra, pick.extra_pct = api.models, api.has_extra, api.extra_pct
+    return pick
+
+
+class ActivityWatcher:
+    """Notices Claude Code activity (every surface writes ~/.claude/projects/**/*.jsonl as it works) so the
+    account poll can run right after a response instead of waiting for the next interval. Reads no content."""
+
+    def __init__(self, root=None):
+        self.root = root or os.path.join(os.path.expanduser("~"), ".claude", "projects")
+        self.tracked = {}
+        self.last_scan = 0.0
+        self.ready = False
+
+    def _scan(self, now):
+        cutoff, found = now - 15 * 60, {}
+        try:
+            for d in os.scandir(self.root):
+                if not d.is_dir():
+                    continue
+                for f in os.scandir(d.path):
+                    if f.name.endswith(".jsonl"):
+                        st = f.stat()
+                        if st.st_mtime >= cutoff:
+                            found[f.path] = (st.st_mtime, st.st_size)
+        except OSError:
+            pass
+        return found
+
+    def changed(self, now=None):
+        now = time.time() if now is None else now
+        hit = False
+        if now - self.last_scan >= 30:                  # full rescan: also finds brand-new sessions
+            self.last_scan = now
+            new = self._scan(now)
+            if self.ready:
+                hit = any(self.tracked.get(p) != v for p, v in new.items())
+            self.tracked, self.ready = new, True
+            return hit
+        for p, v in list(self.tracked.items()):         # cheap: stat only the recently active files
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            cur = (st.st_mtime, st.st_size)
+            if cur != v:
+                self.tracked[p] = cur
+                hit = True
+        return hit
 
 
 # ------------------------------------------------------------------ sign-in dialog
@@ -214,6 +281,10 @@ class App:
         self.demo = demo
         self.cfg = Cfg() if demo else Cfg.load()
         self.poller = auth.ApiPoller()
+        self.ticker = sound.Ticker()
+        self.watcher = ActivityWatcher()
+        self.activity_at, self.activity_pending = 0, False
+        self._sig = None
         self.cur = None
         self.hist = []
         self.view = model.build_view(None, [], False, "", store.now())
@@ -263,7 +334,7 @@ class App:
             r.withdraw()
         self.redraw()
         self.poll_now(True)
-        r.after(10000, self.tick)
+        r.after(2000, self.tick)
         r.after(700, self.check_show_signal)
 
     # ---------------------------------------------------------------- geometry
@@ -289,7 +360,7 @@ class App:
         self.redraw()
 
     # ---------------------------------------------------------------- rendering
-    def redraw(self, fast=False):
+    def redraw(self, fast=False, force=False):
         if self._redraw_job:
             try:
                 self.root.after_cancel(self._redraw_job)
@@ -298,8 +369,12 @@ class App:
             self._redraw_job = None
         if not self.visible:
             return
+        sig = (self.view.signature(), self.cfg.opacity, self.cfg.compact, round(self.scale, 4))
+        if not fast and not force and sig == self._sig:        # nothing visible changed: skip the ~0.3 s repaint
+            return
         img, hits = render.render(self.view, self.cfg.opacity, self.cfg.compact, self.scale,
-                                  max_big_px=1_200_000 if fast else 7_000_000)
+                                  max_big_px=1_200_000 if fast else 5_000_000, max_ss=1 if fast else 2)
+        self._sig = None if fast else sig
         self.hits = hits
         self.pw, self.ph = img.size
         self.root.geometry("%dx%d+%d+%d" % (self.pw, self.ph, self.px, self.py))
@@ -334,11 +409,11 @@ class App:
         self.stamps = stamps
 
         best = merge(store.read_limits(), read_desktop_log(self.log_path) if self.log_path else None)
-        api, now = self.poller.last, store.now()
-        if api is not None and (best is None or now - api.updated < 20 * 60 or api.updated >= best.updated):
-            self.cur = api
-        else:
-            self.cur = best
+        now = store.now()
+        self.cur = choose(self.poller.last, best, now)
+        n = self.ticker.feed(self.cur, now)             # weekly +1 % -> soft tick (sound only)
+        if n and self.cfg.sound and not self.demo:
+            sound.play(n)
         if hist_changed:
             self.hist = store.read_history(now - 7 * 86400)
         self.rebuild_view()
@@ -357,16 +432,20 @@ class App:
             self.redraw()
         winapi.trim_memory()
 
-    def poll_now(self, force):
+    def poll_now(self, force=False, activity=False):
+        """-> True if a poll was started. force = user asked; activity = Claude Code just responded."""
         if self.demo or not self.poller.signed_in():
-            return
+            return False
         now = store.now()
-        if not force and (now < self.poller.next_allowed or now - self.poller.last_poll_at < 180):
-            return
-        if force and now - self.poller.last_poll_at < 15:
-            return
+        if now < self.poller.next_allowed:              # server asked us to slow down
+            return False
+        need = 15 if (force or activity) else self.cfg.interval
+        if now - self.poller.last_poll_at < need:
+            return False
         if self.poller.poll_async():
             self.root.after(400, self._poll_wait)
+            return True
+        return False
 
     def _poll_wait(self):
         if self.poller.running:
@@ -384,8 +463,9 @@ class App:
         if self.quitting:
             return
         try:
-            self.reload(False)
-            minute = store.now() // 60
+            self.reload(False)                          # cheap: only stat()s the data files
+            now = store.now()
+            minute = now // 60
             if minute != self.last_minute:
                 self.last_minute = minute
                 self.rebuild_view()
@@ -394,9 +474,15 @@ class App:
                 if dpi != self.dpi:
                     self.dpi = dpi
                     self.apply_layout(False)
-            self.poll_now(False)
+            if self.watcher.changed():                  # Claude Code just did something: usage probably moved
+                self.activity_at, self.activity_pending = now, True
+            if self.activity_pending and (now - self.activity_at >= 5 or now - self.poller.last_poll_at >= 20):
+                if self.poll_now(activity=True):
+                    self.activity_pending = False
+            else:
+                self.poll_now()
         finally:
-            self.root.after(10000, self.tick)
+            self.root.after(2000, self.tick)
 
     def check_show_signal(self):
         if self.quitting:
@@ -447,7 +533,7 @@ class App:
         self.root.deiconify()
         self.root.attributes("-topmost", bool(self.cfg.top))
         winapi.make_layered(self.hwnd)
-        self.redraw()
+        self.redraw(force=True)
 
     def hide(self):
         self.visible = False
@@ -581,6 +667,14 @@ class App:
         self.cfg.save()
         self.redraw()
 
+    def toggle_sound(self):
+        self.cfg.sound = not self.cfg.sound
+        self.cfg.save()
+
+    def set_interval(self, sec):
+        self.cfg.interval = sec
+        self.cfg.save()
+
     def set_top(self):
         self.cfg.top = not self.cfg.top
         self.root.attributes("-topmost", bool(self.cfg.top))
@@ -645,6 +739,12 @@ class App:
         for z in ZOOMS:
             sub2.add_checkbutton(label="%%%d" % z, command=lambda z=z: self.set_zoom(z), variable=tk.BooleanVar(value=self.cfg.zoom == z))
         m.add_cascade(label="Boyut", menu=sub2)
+        m.add_checkbutton(label="Haftalık %1 artışında ses", command=self.toggle_sound, variable=tk.BooleanVar(value=self.cfg.sound))
+        m.add_command(label="Sesi dene", command=lambda: sound.play(1))
+        sub3 = tk.Menu(m, tearoff=0, bg="#1f232b", fg=FG, activebackground="#2c323e", activeforeground=FG, selectcolor=ACCENT_HEX, bd=0, font=("Segoe UI", 10))
+        for sec, lab in INTERVALS:
+            sub3.add_checkbutton(label=lab, command=lambda sec=sec: self.set_interval(sec), variable=tk.BooleanVar(value=self.cfg.interval == sec))
+        m.add_cascade(label="Hesap sorgu sıklığı", menu=sub3)
         m.add_checkbutton(label="Windows ile başlat", command=lambda: winapi.set_autostart(not winapi.autostart_on()),
                           variable=tk.BooleanVar(value=winapi.autostart_on()))
         m.add_separator()

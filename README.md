@@ -48,6 +48,11 @@ Undo: `.\connect-claude.ps1 -Remove`, `.\install.ps1 -Uninstall`.
 - **Right-click** or the ⋯ button for the menu: background transparency, size presets, always-on-top, start with Windows, sign in/out, connection status.
 - The header **lamp** turns green / amber / red with your highest usage; the tray icon shows the 5-hour percentage; a notification appears above 90 %.
 - The white tick on a bar marks where you would be if you used the limit evenly across the window.
+- **Sound:** a soft, slightly deep "tick" plays each time the weekly limit goes up by 1 % (up to 3 ticks for a bigger jump). Sound only, no notification; it is synthesised in code. Toggle it or preview it from the menu. It stays silent on start-up, on a new weekly window, and when stale data catches up.
+
+## How fresh is the data?
+
+The newest source always wins. A new Claude Code response reaches the screen within about 2 seconds (statusLine link). With account sign-in the panel also polls every 60 s (30 s / 1 min / 2 min in the menu) and **right after Claude Code activity** (it only watches whether your `~/.claude/projects` session files changed, never their content), at most once every 15 s. If the server answers 429 the panel backs off gradually and obeys `Retry-After`. Usage from other devices (phone, browser) shows up at the next poll.
 
 Try it with sample data: `pythonw app\limitlamp.pyw --demo`.
 
@@ -55,7 +60,9 @@ Try it with sample data: `pythonw app\limitlamp.pyw --demo`.
 
 ```powershell
 python tests\test_core.py      # feeder, parsing, DPAPI store, OAuth helpers (dummy values only)
-python tests\selftest_gui.py   # drives a real window: zoom, resize, drag, compact, dialog, menu
+python tests\test_realtime.py  # newest-data-wins, poll timing/back-off, activity trigger, +1 % tick logic, sound synthesis
+python tests\selftest_gui.py   # drives a real window: zoom, resize, drag, compact, dialog, menu, skipped redraws
+python tests\e2e_live.py       # feeder -> real window: value on screen within one tick, tick sound recorded
 ```
 
 ## Limitations

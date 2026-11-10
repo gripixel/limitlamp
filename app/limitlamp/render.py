@@ -320,12 +320,12 @@ def _no_data(P, view, ph, hits):
 
 # ---------------------------------------------------------------- main entry
 
-def render(view, opacity_pct, compact, scale, max_big_px=7_000_000):
+def render(view, opacity_pct, compact, scale, max_big_px=7_000_000, max_ss=3):
     """-> (PIL RGBA image of size round(WT*scale) x round(total_h*scale), hit rects in panel logical coords)."""
     ph = panel_height(view, compact)
     th = ph + 2 * M
     W, H = max(40, int(round(WT * scale))), max(40, int(round(th * scale)))
-    ss = 3
+    ss = max(1, int(max_ss))
     while ss > 1 and W * H * ss * ss > max_big_px:
         ss -= 1
     k = scale * ss

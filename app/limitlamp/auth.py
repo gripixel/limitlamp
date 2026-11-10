@@ -52,7 +52,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_opener = urllib.request.build_opener(_NoRedirect)
+_opener = None
+
+
+def _get_opener():
+    """One TLS context for the whole run (loading the Windows certificate store on every poll is the costly part)."""
+    global _opener
+    if _opener is None:
+        import ssl
+        _opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+    return _opener
 
 
 def http(method, url, body=None, bearer=None, timeout=20):
@@ -68,7 +77,7 @@ def http(method, url, body=None, bearer=None, timeout=20):
         headers["anthropic-version"] = "2023-06-01"
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with _opener.open(req, timeout=timeout) as r:
+        with _get_opener().open(req, timeout=timeout) as r:
             res.status = r.status
             res.body = r.read(400000).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
@@ -342,6 +351,7 @@ class ApiPoller:
         self.last_status = 0
         self.next_allowed = 0     # epoch: do not query before this
         self.last_poll_at = 0
+        self.rate_hits = 0        # consecutive 429 answers (drives the back-off)
         self.running = False
         self._lock = threading.Lock()
 
@@ -409,9 +419,13 @@ class ApiPoller:
         _log("usage %d" % r.status)
 
         if r.status == 429:
-            self.next_allowed = store.now() + int(max(300, r.retry_after))
-            self.last_error = "Sunucu yoğun (429) · yeniden denenecek"
+            # Obey the server; if it keeps saying 429, back off gradually (90 s, 3 min, 6 min ... max 15 min).
+            self.rate_hits += 1
+            wait = int(max(r.retry_after, min(900, 90 * 2 ** (self.rate_hits - 1))))
+            self.next_allowed = store.now() + wait
+            self.last_error = "Sunucu yoğun (429) · %d sn sonra yeniden denenecek" % wait
             return
+        self.rate_hits = 0
         if r.status == 0:
             self.last_error, self.next_allowed = "Ağa ulaşılamadı", store.now() + 60
             return

@@ -31,6 +31,19 @@ t = time.perf_counter(); a.redraw(); dt = (time.perf_counter() - t) * 1000
 print("      full-quality redraw: %.0f ms" % dt)
 t = time.perf_counter(); a.redraw(fast=True); print("      fast redraw: %.0f ms" % ((time.perf_counter() - t) * 1000))
 
+# identical redraws are skipped (saves CPU), real changes and forced redraws are not
+calls = []
+_orig_render = render.render
+render.render = lambda *a, **k: (calls.append(1), _orig_render(*a, **k))[1]
+a.redraw(force=True); n1 = len(calls)
+a.redraw(); a.redraw()
+check("identical redraw is skipped", len(calls) == n1, (n1, len(calls)))
+a.set_opacity(70); a.set_opacity(88)
+check("a real change (opacity) redraws", len(calls) > n1, len(calls))
+n2 = len(calls); a.redraw(force=True)
+check("forced redraw always paints", len(calls) == n2 + 1)
+render.render = _orig_render
+
 # zoom
 bottom0 = y0 + h0
 a.set_zoom(170); r.update()
